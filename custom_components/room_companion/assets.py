@@ -274,7 +274,9 @@ class AssetStore:
                 _LOGGER.debug("Unreadable image %s: %s", url, err)
                 return None
             return out.data, out.content_type, _size_headers(out)
-        return await self._cached(f"image:{key}:{width}x{height}:{fmt}", make)
+        # A notification keeps its key while its picture changes (KDE chats).
+        source = hashlib.sha256(url.encode()).hexdigest()[:16]
+        return await self._cached(f"image:{key}:{source}:{width}x{height}:{fmt}", make)
 
     async def glyph(self, font: str | None, codepoint: int, size: int, fmt: str) -> tuple[bytes, str, dict[str, str]] | None:
         """A character the panel's fonts lack: the chosen font first, then the bundled ones."""

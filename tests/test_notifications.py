@@ -1,5 +1,7 @@
 """KDE notifications on the panel."""
 
+from unittest.mock import AsyncMock
+
 from homeassistant.core import HomeAssistant
 
 from custom_components.room_companion.assets import AssetStore
@@ -39,3 +41,27 @@ async def test_joined_chat_keeps_one_picture_url(hass: HomeAssistant, panel_call
     # The stable key serves the newest icon.
     key = urls[1].split("/image/")[1].split(".png")[0]
     assert store._sources[key] == f"{ICONS}/two.png"
+
+
+async def test_updated_icon_replaces_the_cached_picture(hass: HomeAssistant, panel_calls, monkeypatch) -> None:
+    """A phone posts a chat first with the app icon, then with the sender's avatar."""
+    from unittest.mock import MagicMock
+
+    store = AssetStore(hass)
+    monkeypatch.setattr(store, "_download", AsyncMock(side_effect=lambda url: url.encode()))
+    monkeypatch.setattr(
+        "custom_components.room_companion.imaging.contain",
+        lambda data, w, h, fmt: MagicMock(data=data, content_type="image/png", width=w, height=h),
+    )
+    messenger = Messenger(hass, store, PREFIX, BASE, 10)
+    unsub = messenger.listen_kde([])
+    request = MagicMock(query={})
+
+    await _send(hass, id="tg:1", app="Telegram", title="Ana", text="hi", icon_url=f"{ICONS}/app.png")
+    key = panel_calls[-1].data["image_url"].split("/image/")[1].split(".png")[0]
+    assert (await store.image(key, request))[0] == f"{ICONS}/app.png".encode()
+    await _send(hass, id="tg:1", app="Telegram", title="Ana", text="hi", icon_url=f"{ICONS}/avatar.png",
+                action="updated")
+    unsub()
+    assert panel_calls[-1].data["image_url"].split("/image/")[1].split(".png")[0] == key
+    assert (await store.image(key, request))[0] == f"{ICONS}/avatar.png".encode()
