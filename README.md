@@ -104,7 +104,7 @@ action when the panel connects; `GET <base>/info` lists what is served.
 
 | Path | Query | Returns |
 | --- | --- | --- |
-| `/cover/<media_player>` | `w`, `h`, `mode=cover\|blur`, `fmt=jpeg\|png\|rgb565`, `swap=1`, `q`, `dim` (percent, blur) | The player's art cropped to `w`×`h`, or the blurred, darkened lyrics backdrop. |
+| `/cover/<media_player>` | `w`, `h`, `mode=cover\|fit\|blur`, `fmt=jpeg\|png\|rgb565`, `swap=1`, `q`, `dim` (percent, blur) | The player's art: `cover` crops it to fill `w`×`h` (the knob), `fit` scales it inside `w`×`h` keeping its shape (the panels), `blur` is the blurred, darkened lyrics backdrop. |
 | `/emoji/<stem>.png\|.bgra\|.svg` | `size` (default 48) | Noto Color Emoji. `stem` is the code points in lowercase hex joined by `_`, without `fe0f` (`1f468_200d_1f469`). `.bgra` is raw LVGL ARGB8888. |
 | `/icon/<name>.svg` | `size` (default 80) | A white Material Design Icon, e.g. `/icon/weather-sunny.svg`. |
 | `/image/<key>.png` | `w`, `h`, `fmt` | A picture passed to `show_message`, shrunk to fit. |

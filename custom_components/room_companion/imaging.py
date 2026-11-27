@@ -97,6 +97,20 @@ def cover(data: bytes, width: int, height: int, fmt: str = "jpeg", quality: int 
     return encode(image, fmt, quality, swap)
 
 
+def fit(data: bytes, width: int, height: int, fmt: str = "jpeg", quality: int = 85,
+        swap: bool = False) -> Encoded:
+    """Art scaled to fit inside width x height, keeping its aspect ratio (no crop).
+
+    A 16:9 video thumbnail in a 320 x 320 box comes back 320 x 180.
+    """
+    image = _open(data)
+    scale = min(width / image.width, height / image.height)
+    size = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
+    if size != image.size:
+        image = image.resize(size, Image.Resampling.LANCZOS)
+    return encode(image, fmt, quality, swap)
+
+
 def backdrop(data: bytes, width: int, height: int, dim: float = 0.62, fmt: str = "jpeg",
              quality: int = 80, swap: bool = False) -> Encoded:
     """The lyrics backdrop: the art filling the screen, heavily blurred and darkened.

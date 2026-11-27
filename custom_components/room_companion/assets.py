@@ -197,7 +197,12 @@ class AssetStore:
         return await self._cached(f"mdi:{name}:{size}", make)
 
     async def cover(self, entity_id: str, request: web.Request) -> tuple[bytes, str, dict[str, str]] | None:
-        """A media player's art: the cover (mode=cover) or the blurred backdrop (mode=blur)."""
+        """A media player's art.
+
+        mode=cover (default): cropped to fill w x h (the knob's round screen).
+        mode=fit: scaled into w x h keeping its shape (the panels).
+        mode=blur: the blurred, darkened lyrics backdrop filling w x h.
+        """
         component = self.hass.data.get("media_player")
         entity = component.get_entity(entity_id) if component is not None else None
         if entity is None:
@@ -205,6 +210,8 @@ class AssetStore:
         width = _int(request, "w", 96, 16, imaging.MAX_SIDE)
         height = _int(request, "h", width, 16, imaging.MAX_SIDE)
         mode = request.query.get("mode", "cover")
+        if mode not in ("cover", "fit", "blur"):
+            mode = "cover"
         fmt = _fmt(request, "jpeg", ("jpeg", "png", "rgb565"))
         swap = request.query.get("swap") == "1"
         quality = _int(request, "q", 85, 30, 95)
@@ -228,7 +235,7 @@ class AssetStore:
                 )
             else:
                 out = await self.hass.async_add_executor_job(
-                    imaging.cover, data, width, height, fmt, quality, swap
+                    imaging.fit if mode == "fit" else imaging.cover, data, width, height, fmt, quality, swap
                 )
             headers = _size_headers(out)
             headers["ETag"] = '"' + hashlib.sha1(key.encode()).hexdigest()[:16] + '"'

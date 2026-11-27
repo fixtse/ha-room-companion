@@ -72,3 +72,14 @@ def test_glyph_with_header() -> None:
     width, height, advance, ascent = struct.unpack("<HHHH", out.data[:8])
     assert (width, height, advance, ascent) == (out.width, out.height, out.advance, out.ascent)
     assert len(out.data) == 8 + width * height
+
+
+def test_fit_keeps_shape() -> None:
+    """Panels: a 16:9 thumbnail stays 16:9 inside the square box."""
+    out = imaging.fit(_png((1280, 720)), 320, 320, "jpeg")
+    assert (out.width, out.height) == (320, 180)
+    assert Image.open(io.BytesIO(out.data)).size == (320, 180)
+    tall = imaging.fit(_png((100, 200)), 320, 320, "png")
+    assert (tall.width, tall.height) == (160, 320)
+    square = imaging.cover(_png((1280, 720)), 320, 320, "jpeg")  # The knob still crops.
+    assert (square.width, square.height) == (320, 320)
