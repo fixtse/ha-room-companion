@@ -20,9 +20,12 @@ Previews: the panel shows snapshots (or an MJPEG stream) until the live video
 plays. Snapshots serves them at the camera frame's size, from go2rtc's running
 stream when a go2rtc has the camera (including WebRTC Camera's and Home
 Assistant's own, reached locally), else from Home Assistant's camera image.
-While a panel looks at a camera, the next frame is fetched in the background,
-so a request is answered from the latest frame at once; panels showing the
-same camera share the fetches.
+While a panel looks at a camera, frames come in the background, so a request
+is answered from the latest frame at once; panels showing the same camera share
+them. With an RTSP source (go2rtc's restream, else the camera's own), ffmpeg
+reads the stream once and decodes only its key frames: a new frame every second
+or two at little cost, with no reconnect per frame. Otherwise (no ffmpeg, no
+RTSP) single frames are fetched in turn.
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ import html
 import json
 import logging
 import re
+import shutil
 import time
 from typing import Any
 from urllib.parse import quote, urlencode, urlsplit
@@ -62,6 +66,10 @@ LOCAL_GO2RTC = ("http://127.0.0.1:1984", f"http://127.0.0.1:{HA_GO2RTC_PORT}")
 SNAPSHOT_REFRESH_S = 1.0  # Background fetch interval while a panel watches.
 SNAPSHOT_WATCH_S = 12.0  # Keep fetching this long after the last request.
 SNAPSHOT_STALE_S = 30.0  # Older than this: fetch before answering.
+READER_FIRST_S = 10.0  # ffmpeg: the first key frame must come within this.
+READER_GAP_S = 8.0  # ffmpeg: and the next ones within this.
+READER_WIDTH = 960  # ffmpeg: frames are scaled down to at most this width.
+READER_BUFFER = 4 * 1024 * 1024
 STREAM_TICK_S = 0.2  # MJPEG: how often new frames are looked for.
 STREAM_KEEPALIVE_S = 3.0  # MJPEG: resend the last frame after this long.
 STREAM_LIMIT_S = 1800.0  # MJPEG: the panel reconnects after this.
@@ -285,6 +293,19 @@ class Cameras:
         return None
 
 
+    async def rtsp(self, options: dict[str, Any], origin: str, entity: str) -> str | None:
+        """An RTSP address of the camera: go2rtc's restream when one has it, else its own."""
+        for server in self._servers(options, origin, local=True):
+            streams = await self._list(server)
+            if streams is None:
+                continue
+            name = await self._stream(server, streams, entity, None, add=False)
+            if name:
+                return f"rtsp://{_host(server)}:{RTSP_PORT}/{quote(name, safe='.-_')}"
+        source = await self._source_url(entity)
+        return source if source and source.startswith(("rtsp://", "rtsps://")) else None
+
+
 class Snapshots:
     """Latest frames of the cameras panels look at, fetched ahead."""
 
@@ -321,9 +342,68 @@ class Snapshots:
             pending.add_done_callback(lambda _: self._fetching.pop(entity, None))
         return await asyncio.shield(pending)
 
+    def _watched(self, entity: str) -> bool:
+        return time.monotonic() - self._wanted.get(entity, 0) < SNAPSHOT_WATCH_S
+
+    def _ffmpeg(self) -> str | None:
+        try:
+            from homeassistant.components.ffmpeg import get_ffmpeg_manager  # noqa: PLC0415
+
+            return get_ffmpeg_manager(self.hass).binary
+        except Exception:  # noqa: BLE001 - not installed or not set up.
+            return shutil.which("ffmpeg")
+
+    async def _read(self, entity: str) -> bool:
+        """Key frames from ffmpeg while the camera is watched; False when that cannot run."""
+        binary = self._ffmpeg()
+        options, origin = self._sources[entity]
+        url = await self.cameras.rtsp(options, origin, entity) if binary else None
+        if not binary or not url:
+            return False
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                binary, "-hide_banner", "-loglevel", "error", "-nostdin",
+                *(["-rtsp_transport", "tcp"] if url.startswith("rtsp") else []),
+                "-skip_frame", "nokey", "-i", url, "-an", "-sn", "-dn",
+                "-fps_mode", "passthrough", "-vf", f"scale=w=min({READER_WIDTH}\\,iw):h=-2",
+                "-q:v", "5", "-f", "image2pipe", "-c:v", "mjpeg", "pipe:1",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            )
+        except OSError as err:
+            _LOGGER.debug("ffmpeg could not start for %s: %s", entity, err)
+            return False
+        frames, buffer = 0, b""
+        try:
+            while self._watched(entity):
+                try:
+                    chunk = await asyncio.wait_for(proc.stdout.read(65536), READER_GAP_S if frames else READER_FIRST_S)
+                except TimeoutError:
+                    break
+                if not chunk:
+                    break
+                buffer += chunk
+                while True:
+                    start = buffer.find(b"\xff\xd8")
+                    end = buffer.find(b"\xff\xd9", start + 2) if start >= 0 else -1
+                    if end < 0:
+                        buffer = buffer[start:] if 0 <= start and len(buffer) - start < READER_BUFFER else b""
+                        break
+                    self._latest[entity] = (time.monotonic(), buffer[start:end + 2])
+                    frames += 1
+                    buffer = buffer[end + 2:]
+        finally:
+            if proc.returncode is None:
+                proc.kill()
+            await proc.wait()
+        _LOGGER.debug("ffmpeg read %d key frames of %s", frames, entity)
+        return frames > 0
+
     async def _watch(self, entity: str) -> None:
         try:
-            while time.monotonic() - self._wanted.get(entity, 0) < SNAPSHOT_WATCH_S:
+            # ffmpeg until it stops; single frames for the rest of the time.
+            if await self._read(entity) and not self._watched(entity):
+                return
+            while self._watched(entity):
                 started = time.monotonic()
                 await self._fetch(entity)
                 await asyncio.sleep(max(0.1, SNAPSHOT_REFRESH_S - (time.monotonic() - started)))

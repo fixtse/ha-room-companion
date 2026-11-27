@@ -1,6 +1,8 @@
 """Live camera pages and camera sound."""
 
+import asyncio
 from http import HTTPStatus
+import time
 from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -139,3 +141,52 @@ async def test_snapshot_from_home_assistant(hass: HomeAssistant, hass_client_no_
         assert first.startswith(b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ")
         stream.close()
     await hass.data["room_companion"]["snapshots"].async_stop()
+
+
+class _FakeStdout:
+    def __init__(self, chunks: list[bytes]) -> None:
+        self.chunks = chunks
+
+    async def read(self, _n: int) -> bytes:
+        await asyncio.sleep(0)
+        return self.chunks.pop(0) if self.chunks else b""
+
+
+class _FakeProc:
+    def __init__(self, chunks: list[bytes]) -> None:
+        self.stdout = _FakeStdout(chunks)
+        self.returncode: int | None = None
+
+    def kill(self) -> None:
+        self.returncode = -9
+
+    async def wait(self) -> int:
+        self.returncode = self.returncode if self.returncode is not None else 0
+        return self.returncode
+
+
+async def test_key_frames_from_ffmpeg(hass: HomeAssistant, aioclient_mock, panel_calls) -> None:
+    aioclient_mock.get(f"{GO2RTC}/api/streams", json={"front_door": {}})
+    aioclient_mock.get(f"{GO2RTC}/api/frame.jpeg", status=500)
+    aioclient_mock.get("http://127.0.0.1:11984/api/streams", status=500)
+    await _setup(hass, {CONF_CAMERA_SOURCE: "go2rtc", CONF_GO2RTC_URL: GO2RTC})
+    one, two = _jpeg(64, 36), _jpeg(32, 18)
+    # Frames split across reads, with noise between them.
+    stream = one[:10] + b"", one[10:] + b"junk" + two[:5], two[5:]
+    calls: list[tuple] = []
+
+    async def spawn(*args, **_kwargs):
+        calls.append(args)
+        return _FakeProc(list(stream))
+
+    snapshots = hass.data["room_companion"]["snapshots"]
+    with patch.object(cameras.Snapshots, "_ffmpeg", return_value="ffmpeg"), \
+         patch("custom_components.room_companion.cameras.LOCAL_GO2RTC", ()), \
+         patch("asyncio.create_subprocess_exec", spawn):
+        snapshots._wanted["camera.front_door"] = time.monotonic()
+        snapshots._sources["camera.front_door"] = ({CONF_GO2RTC_URL: GO2RTC}, "http://ha.local:8123")
+        assert await snapshots._read("camera.front_door")
+    assert calls and "rtsp://192.168.1.10:8554/front_door" in calls[0]
+    assert "-skip_frame" in calls[0]
+    assert snapshots.latest("camera.front_door")[1] == two
+    await snapshots.async_stop()

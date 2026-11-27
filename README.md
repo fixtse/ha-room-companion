@@ -112,6 +112,15 @@ The panel's **Other stream names** still apply (sent as `stream=`). Camera
 sound: the panel calls `room_companion.play_camera_audio`, which plays go2rtc's
 RTSP output of the camera (port 8554) on the panel's speaker.
 
+Camera previews (the main page card and the picture before the live video
+plays, with any camera source) come from `<base>/snapshot/<camera>`, scaled to
+the panel's frame. While a panel shows a camera, Home Assistant keeps its latest
+frame ready: ffmpeg reads the camera's RTSP stream (go2rtc's restream when a
+go2rtc has the camera, else the camera's own) and decodes only key frames,
+about one every one or two seconds, without reconnecting per frame. Without
+ffmpeg or an RTSP source it fetches single frames from go2rtc or Home Assistant
+instead.
+
 ## Actions
 
 | Action | Fields |
