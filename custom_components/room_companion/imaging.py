@@ -143,11 +143,18 @@ def _font(path: str, size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(path, size)
 
 
+def _draw(font: ImageFont.FreeTypeFont, text: str) -> Image.Image:
+    left, top, right, bottom = font.getbbox(text)
+    image = Image.new("L", (max(1, right - left), max(1, bottom - top)), 0)
+    ImageDraw.Draw(image).text((-left, -top), text, fill=255, font=font)
+    return image
+
+
 @lru_cache(maxsize=32)
-def _notdef(path: str, size: int) -> bytes:
+def _notdef(path: str, size: int) -> tuple[tuple[int, int], bytes]:
     """What the font draws for a character it lacks (its .notdef box)."""
-    font = _font(path, size)
-    return font.getmask("\U000f0000").tobytes()
+    image = _draw(_font(path, size), "\U000f0000")
+    return image.size, image.tobytes()
 
 
 def has_glyph(path: str, text: str, size: int) -> bool:
@@ -155,8 +162,8 @@ def has_glyph(path: str, text: str, size: int) -> bool:
     font = _font(path, size)
     if text.isspace():
         return font.getlength(text) > 0
-    mask = font.getmask(text)
-    return mask.getbbox() is not None and mask.tobytes() != _notdef(path, size)
+    image = _draw(font, text)
+    return image.getbbox() is not None and (image.size, image.tobytes()) != _notdef(path, size)
 
 
 def glyph(fonts: list[str], text: str, size: int, fmt: str = "a8") -> Glyph | None:
