@@ -26,8 +26,11 @@ DEFAULT_TIMEOUT: Final = 30
 ACTION_SHOW_MESSAGE: Final = "show_message"
 ACTION_DISMISS_MESSAGE: Final = "dismiss_message"
 ACTION_SET_LYRICS: Final = "set_lyrics"
-# Optional, newer firmware: receives the base URL of the panel's local assets.
+ACTION_SET_LYRICS_OFFSET: Final = "set_lyrics_offset"
+# Newer firmware: receives the base URL of the panel's local assets.
 ACTION_SET_COMPANION: Final = "set_companion"
+# Fired by a panel whose player screen opened mid-song without lyrics.
+LYRICS_REQUEST_EVENT: Final = "esphome.room_companion_lyrics"
 
 URL_BASE: Final = "/api/room_companion"
 API_VERSION: Final = 1

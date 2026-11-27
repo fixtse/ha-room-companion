@@ -32,6 +32,8 @@ from . import panel
 from .assets import AssetStore, AssetView, InfoView
 from .const import (
     ACTION_SET_COMPANION,
+    ACTION_SET_LYRICS_OFFSET,
+    LYRICS_REQUEST_EVENT,
     CONF_BASE_URL,
     CONF_KDE,
     CONF_KDE_DEVICES,
@@ -49,7 +51,7 @@ from .notifications import Messenger, internal_url
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.NOTIFY]
+PLATFORMS = [Platform.NOTIFY, Platform.NUMBER]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 CHECK_INTERVAL = timedelta(minutes=5)
 
@@ -67,6 +69,7 @@ class RoomCompanionData:
     base: str | None
     messenger: Messenger
     lyrics: PanelLyrics
+    offset_ms: int = 0  # Lyrics sync correction (number entity).
     unsubs: list[Any] = field(default_factory=list)
 
 
@@ -166,12 +169,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: RoomCompanionConfigEntry
         data.unsubs.append(messenger.listen_kde(list(options.get(CONF_KDE_DEVICES, []))))
 
     async def announce() -> None:
-        """Tell newer firmware where its assets are."""
+        """Tell newer firmware where its assets are, and the lyrics offset."""
         if base is not None and panel.has_action(hass, prefix, ACTION_SET_COMPANION):
             await panel.call(hass, prefix, ACTION_SET_COMPANION, {"url": base})
+        if data.offset_ms and panel.has_action(hass, prefix, ACTION_SET_LYRICS_OFFSET):
+            await panel.call(hass, prefix, ACTION_SET_LYRICS_OFFSET, {"offset_ms": data.offset_ms})
+
+    found = panel.find_panel(hass, prefix)
+
+    # The panel opened a player mid-song without lyrics: send them.
+    if found.device_id is not None:
+        device_id = found.device_id
+
+        @callback
+        def _is_this_panel(event_data: Any) -> bool:
+            return event_data.get("device_id") == device_id
+
+        @callback
+        def _lyrics_requested(event: Event) -> None:
+            if options.get(CONF_LYRICS, True):
+                lyrics.request(str(event.data.get("entity_id", "")))
+
+        data.unsubs.append(hass.bus.async_listen(
+            LYRICS_REQUEST_EVENT, _lyrics_requested, event_filter=_is_this_panel
+        ))
 
     # When the panel comes back (it restarted or reconnected): resend state.
-    found = panel.find_panel(hass, prefix)
     if found.device_id is not None:
         registry = er.async_get(hass)
         watched = [e.entity_id for e in er.async_entries_for_device(registry, found.device_id)]

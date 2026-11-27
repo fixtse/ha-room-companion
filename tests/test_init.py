@@ -106,3 +106,48 @@ async def test_emoji_served_and_cached(hass: HomeAssistant, hass_client_no_auth,
         assert (await client.get(f"/api/room_companion/{TOKEN}/emoji/zz.png")).status == HTTPStatus.NOT_FOUND
         info = await (await client.get(f"/api/room_companion/{TOKEN}/info")).json()
         assert info["api"] == 1
+
+
+async def test_flow_finds_knob(hass: HomeAssistant, knob_calls) -> None:
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    assert result["type"] is FlowResultType.FORM
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_PREFIX: "onx2424g013_ab12cd"})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_announces_assets(hass: HomeAssistant, panel_calls) -> None:
+    await _setup(hass)
+    sent = [c for c in panel_calls if c.service.endswith("_set_companion")]
+    assert sent and sent[-1].data["url"].endswith(f"/api/room_companion/{TOKEN}")
+
+
+async def test_lyrics_offset_number(hass: HomeAssistant, panel_calls) -> None:
+    await _setup(hass)
+    entity_id = hass.states.async_entity_ids("number")[0]
+    await hass.services.async_call("number", "set_value", {"entity_id": entity_id, "value": 1.5}, blocking=True)
+    sent = [c for c in panel_calls if c.service.endswith("_set_lyrics_offset")]
+    assert sent[-1].data == {"offset_ms": 1500}
+    assert hass.states.get(entity_id).state == "1.5"
+
+
+async def test_mid_song_request(hass: HomeAssistant, panel_calls, aioclient_mock) -> None:
+    """A panel that opens a player mid-song asks for its lyrics."""
+    from homeassistant.helpers import device_registry as dr
+    from custom_components.room_companion.const import LYRICS_REQUEST_EVENT
+
+    aioclient_mock.get(LRCLIB_URL, json={"syncedLyrics": "[00:01.00] mid"})
+    esphome = MockConfigEntry(domain="esphome", data={"device_name": "onx3248g035-dbbc54"})
+    esphome.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=esphome.entry_id, identifiers={("esphome", "aa:bb")}, name="ONX3248G035 dbbc54",
+        model="ESPHome Room Companion ONX3248G035",
+    )
+    hass.states.async_set("media_player.radio", "playing", {"media_title": "Song", "media_artist": "Band"})
+    await _setup(hass)  # The radio is not one of the configured players.
+    hass.bus.async_fire(LYRICS_REQUEST_EVENT, {"device_id": "other", "entity_id": "media_player.radio"})
+    await hass.async_block_till_done()
+    assert not [c for c in panel_calls if c.service.endswith("_set_lyrics")]
+    hass.bus.async_fire(LYRICS_REQUEST_EVENT, {"device_id": device.id, "entity_id": "media_player.radio"})
+    await hass.async_block_till_done()
+    sent = [c for c in panel_calls if c.service.endswith("_set_lyrics")]
+    assert sent[-1].data == {"entity_id": "media_player.radio", "title": "Song", "lrc": "[00:01.00] mid"}

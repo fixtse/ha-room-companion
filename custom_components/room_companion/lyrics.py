@@ -137,6 +137,14 @@ class PanelLyrics:
             self._schedule(player, self.hass.states.get(player))
 
     @callback
+    def request(self, player: str) -> None:
+        """The panel opened a player without lyrics: send them, even mid-song."""
+        if not player.startswith("media_player."):
+            return
+        self._sent.pop(player, None)
+        self._schedule(player, self.hass.states.get(player))
+
+    @callback
     def _changed(self, event: Event[EventStateChangedData]) -> None:
         self._schedule(event.data["entity_id"], event.data["new_state"])
 

@@ -3,13 +3,18 @@
 <img src="icon.png" alt="" width="96" align="right">
 
 The Home Assistant side of [ESPHome Room Companion](https://github.com/fixtse/ESPHome-Room-Companion)
-panels (ONX3248G035 3.5" and ONX2432G028 2.8"). It takes over work the panels
-and separate blueprints do today:
+panels (ONX3248G035 3.5" and ONX2432G028 2.8") and the
+[OpenNextion KNOB](https://github.com/fixtse/OpenNextion-KNOB-ESPHome)
+(ONX2424G013). It takes over work the devices and separate blueprints do
+today:
 
 - **Synced lyrics.** When a chosen media player starts a track, Home Assistant
   asks [LRCLIB](https://lrclib.net) once and sends the timed lyrics to the
   panel. This replaces the *Room Companion synced lyrics* blueprint and its
-  `rest_command`. Results are cached, so several panels cost one lookup.
+  `rest_command`. Results are cached, so several panels cost one lookup. A
+  panel that opens a player mid-song asks for its lyrics, and a **Lyrics
+  offset** number entity shifts them live (panels only; the knob has no
+  lyrics).
 - **Notifications.** A notify entity per panel (`notify.send_message`), a
   `room_companion.show_message` action whose picture Home Assistant downloads
   and serves to the panel at the right size, and optional forwarding of
@@ -59,6 +64,15 @@ If you used the blueprints before, delete those automations (and the
 `room_companion_lrclib` `rest_command` and the Text helper) so messages and
 lyrics are not sent twice.
 
+## Firmware
+
+Lyrics and notifications work with any Room Companion firmware. Local images,
+the mid-song lyrics request and the lyrics offset need panel firmware
+2026.11.1.25 or later, or knob firmware 2026.11.1.4 or later. When the device
+connects, the integration calls its `set_companion` action with its asset URL;
+the device keeps it and falls back to the internet sources for five minutes
+whenever Home Assistant does not answer.
+
 ## Actions
 
 | Action | Fields |
@@ -98,9 +112,8 @@ no-cache` and an `ETag`; the rest may be cached for a day.
 
 ## Status
 
-0.1.0 is a first release. Its tests run against Home Assistant's test
-framework. The panel firmware still downloads covers, emoji and icons itself;
-using the asset API needs a firmware update that is not released yet.
+Tests run against Home Assistant's test framework. Hardware use with the
+firmware above has not been verified yet.
 
 ## License
 

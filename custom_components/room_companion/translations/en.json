@@ -2,13 +2,15 @@
   "config": {
     "step": {
       "user": {
-        "title": "Add a Room Companion panel",
-        "description": "Pick the panel. It must already be added through the ESPHome integration.",
-        "data": { "prefix": "Panel" }
+        "title": "Add a Room Companion panel or knob",
+        "description": "Pick the device. It must already be added through the ESPHome integration.",
+        "data": {
+          "prefix": "Device"
+        }
       }
     },
     "abort": {
-      "no_panels": "No new Room Companion panel found. Add the panel with the ESPHome integration first, and make sure it is online.",
+      "no_panels": "No new Room Companion panel or knob found. Add it with the ESPHome integration first, make sure it is online and runs firmware from 2026-11-27 or later.",
       "already_configured": "This panel is already set up."
     }
   },
@@ -26,7 +28,7 @@
           "glyph_font": "Font for missing characters"
         },
         "data_description": {
-          "media_players": "The players this panel shows. Their lyrics come from LRCLIB once per track.",
+          "media_players": "The players this panel shows. When a track starts, their lyrics come from LRCLIB once. Players opened on the panel mid-song get theirs when the screen opens.",
           "lyrics": "Look up timed lyrics and send them to the panel when a track starts.",
           "timeout": "How long a notification stays. 0 keeps it until dismissed.",
           "kde_notifications": "Needs KDE for Home Assistant. Notifications removed on the phone are cleared on the panel.",
@@ -39,7 +41,14 @@
   },
   "entity": {
     "notify": {
-      "panel": { "name": "Panel message" }
+      "panel": {
+        "name": "Panel message"
+      }
+    },
+    "number": {
+      "lyrics_offset": {
+        "name": "Lyrics offset"
+      }
     }
   },
   "issues": {
@@ -49,29 +58,56 @@
     }
   },
   "exceptions": {
-    "panel_not_loaded": { "message": "Room Companion panel {panel} is not set up or not loaded." }
+    "panel_not_loaded": {
+      "message": "Room Companion panel {panel} is not set up or not loaded."
+    }
   },
   "services": {
     "show_message": {
       "name": "Show message",
       "description": "Shows a message, with an optional picture, in the panel's notification centre. Home Assistant downloads the picture and serves it to the panel at the right size.",
       "fields": {
-        "panel": { "name": "Panel", "description": "The Room Companion panel." },
-        "title": { "name": "Title", "description": "Heading of the message." },
-        "message": { "name": "Message", "description": "Text of the message." },
-        "image_url": { "name": "Picture address", "description": "Address of a picture to show. Optional." },
-        "timeout": { "name": "Time", "description": "Seconds to show it; 0 keeps it until dismissed. Defaults to the panel's notification time." }
+        "panel": {
+          "name": "Panel",
+          "description": "The Room Companion panel."
+        },
+        "title": {
+          "name": "Title",
+          "description": "Heading of the message."
+        },
+        "message": {
+          "name": "Message",
+          "description": "Text of the message."
+        },
+        "image_url": {
+          "name": "Picture address",
+          "description": "Address of a picture to show. Optional."
+        },
+        "timeout": {
+          "name": "Time",
+          "description": "Seconds to show it; 0 keeps it until dismissed. Defaults to the panel's notification time."
+        }
       }
     },
     "dismiss_message": {
       "name": "Dismiss message",
       "description": "Dismisses the newest message on the panel.",
-      "fields": { "panel": { "name": "Panel", "description": "The Room Companion panel." } }
+      "fields": {
+        "panel": {
+          "name": "Panel",
+          "description": "The Room Companion panel."
+        }
+      }
     },
     "resend_lyrics": {
       "name": "Send lyrics again",
       "description": "Sends the lyrics of the panel's media players again.",
-      "fields": { "panel": { "name": "Panel", "description": "The Room Companion panel." } }
+      "fields": {
+        "panel": {
+          "name": "Panel",
+          "description": "The Room Companion panel."
+        }
+      }
     }
   }
 }

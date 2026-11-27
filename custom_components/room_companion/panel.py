@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import slugify
 
-from .const import ACTION_SET_LYRICS, ACTION_SHOW_MESSAGE, ESPHOME_DOMAIN
+from .const import ACTION_SET_COMPANION, ACTION_SET_LYRICS, ACTION_SHOW_MESSAGE, ESPHOME_DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -20,7 +20,8 @@ _LOGGER = logging.getLogger(__name__)
 ESPHOME_ALLOW_ACTIONS = "allow_service_calls"
 # ESPHome stores the node name under this config entry data key.
 ESPHOME_DEVICE_NAME = "device_name"
-# The firmware's ESPHome project name is "fixtse.ESPHome Room Companion <model>".
+# The panels' ESPHome project name is "fixtse.ESPHome Room Companion <model>";
+# the knob's is "fixtse.OpenNextion-KNOB-ESPHome".
 MODEL_PREFIX = "ESPHome Room Companion"
 
 
@@ -40,14 +41,21 @@ def action_name(prefix: str, action: str) -> str:
 
 
 def _prefixes(hass: HomeAssistant) -> set[str]:
-    """Action prefixes of devices that provide both Room Companion actions."""
+    """Action prefixes of Room Companion panels and knobs.
+
+    They provide show_message, plus set_lyrics (panels) or set_companion (any
+    firmware that supports this integration, including the knob).
+    """
     services = hass.services.async_services_for_domain(ESPHOME_DOMAIN)
-    suffix = f"_{ACTION_SET_LYRICS}"
-    return {
-        name[: -len(suffix)]
-        for name in services
-        if name.endswith(suffix) and action_name(name[: -len(suffix)], ACTION_SHOW_MESSAGE) in services
-    }
+    suffix = f"_{ACTION_SHOW_MESSAGE}"
+    found = set()
+    for name in services:
+        if not name.endswith(suffix):
+            continue
+        prefix = name[: -len(suffix)]
+        if any(action_name(prefix, a) in services for a in (ACTION_SET_LYRICS, ACTION_SET_COMPANION)):
+            found.add(prefix)
+    return found
 
 
 def _entry_prefix(entry: ConfigEntry) -> str:
@@ -81,9 +89,13 @@ def allows_actions(hass: HomeAssistant, panel: Panel) -> bool | None:
     return bool(entry.options.get(ESPHOME_ALLOW_ACTIONS, False))
 
 
-def is_room_companion(device: dr.DeviceEntry) -> bool:
-    """Whether a device registry entry is a Room Companion panel."""
-    return (device.model or "").startswith(MODEL_PREFIX)
+def supports_lyrics(hass: HomeAssistant, prefix: str) -> bool:
+    """Panels show lyrics; the knob does not. Works while the device is offline."""
+    if has_action(hass, prefix, ACTION_SET_LYRICS):
+        return True
+    found = find_panel(hass, prefix)
+    device = dr.async_get(hass).async_get(found.device_id) if found.device_id else None
+    return device is not None and (device.model or "").startswith(MODEL_PREFIX)
 
 
 def has_action(hass: HomeAssistant, prefix: str, action: str) -> bool:
