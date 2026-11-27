@@ -1,0 +1,7 @@
+{
+  "name": "Room Companion",
+  "homeassistant": "2025.6.0",
+  "render_readme": true,
+  "zip_release": true,
+  "filename": "room_companion.zip"
+}

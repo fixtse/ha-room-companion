@@ -1,0 +1,44 @@
+show_message:
+  fields:
+    panel:
+      required: true
+      selector:
+        config_entry:
+          integration: room_companion
+    title:
+      example: Washing machine
+      selector:
+        text:
+    message:
+      required: true
+      example: The laundry is done.
+      selector:
+        text:
+          multiline: true
+    image_url:
+      example: https://example.com/picture.png
+      selector:
+        text:
+          type: url
+    timeout:
+      example: 60
+      selector:
+        number:
+          min: 0
+          max: 86400
+          unit_of_measurement: s
+          mode: box
+dismiss_message:
+  fields:
+    panel:
+      required: true
+      selector:
+        config_entry:
+          integration: room_companion
+resend_lyrics:
+  fields:
+    panel:
+      required: true
+      selector:
+        config_entry:
+          integration: room_companion

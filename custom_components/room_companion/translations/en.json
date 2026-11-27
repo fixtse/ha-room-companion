@@ -1,0 +1,77 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a Room Companion panel",
+        "description": "Pick the panel. It must already be added through the ESPHome integration.",
+        "data": { "prefix": "Panel" }
+      }
+    },
+    "abort": {
+      "no_panels": "No new Room Companion panel found. Add the panel with the ESPHome integration first, and make sure it is online.",
+      "already_configured": "This panel is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Panel options",
+        "data": {
+          "media_players": "Media players",
+          "lyrics": "Send synced lyrics",
+          "timeout": "Notification time",
+          "kde_notifications": "Show KDE Connect notifications",
+          "kde_devices": "KDE Connect devices",
+          "base_url": "Home Assistant address for the panel",
+          "glyph_font": "Font for missing characters"
+        },
+        "data_description": {
+          "media_players": "The players this panel shows. Their lyrics come from LRCLIB once per track.",
+          "lyrics": "Look up timed lyrics and send them to the panel when a track starts.",
+          "timeout": "How long a notification stays. 0 keeps it until dismissed.",
+          "kde_notifications": "Needs KDE for Home Assistant. Notifications removed on the phone are cleared on the panel.",
+          "kde_devices": "Only these devices. Leave empty for all.",
+          "base_url": "Where the panel reaches Home Assistant, for example http://192.168.1.2:8123. Leave empty to use Home Assistant's local network address.",
+          "glyph_font": "Path to a TTF or OTF file on the Home Assistant host, for example /config/fonts/NotoSansSC-Regular.otf. Leave empty to turn off characters drawn by Home Assistant."
+        }
+      }
+    }
+  },
+  "entity": {
+    "notify": {
+      "panel": { "name": "Panel message" }
+    }
+  },
+  "issues": {
+    "allow_actions": {
+      "title": "{panel} cannot use Home Assistant actions",
+      "description": "The panel controls devices through Home Assistant actions. Open **Settings → Devices & services → ESPHome**, select **Configure** on {panel} and turn on **Allow the device to perform Home Assistant actions**."
+    }
+  },
+  "exceptions": {
+    "panel_not_loaded": { "message": "Room Companion panel {panel} is not set up or not loaded." }
+  },
+  "services": {
+    "show_message": {
+      "name": "Show message",
+      "description": "Shows a message, with an optional picture, in the panel's notification centre. Home Assistant downloads the picture and serves it to the panel at the right size.",
+      "fields": {
+        "panel": { "name": "Panel", "description": "The Room Companion panel." },
+        "title": { "name": "Title", "description": "Heading of the message." },
+        "message": { "name": "Message", "description": "Text of the message." },
+        "image_url": { "name": "Picture address", "description": "Address of a picture to show. Optional." },
+        "timeout": { "name": "Time", "description": "Seconds to show it; 0 keeps it until dismissed. Defaults to the panel's notification time." }
+      }
+    },
+    "dismiss_message": {
+      "name": "Dismiss message",
+      "description": "Dismisses the newest message on the panel.",
+      "fields": { "panel": { "name": "Panel", "description": "The Room Companion panel." } }
+    },
+    "resend_lyrics": {
+      "name": "Send lyrics again",
+      "description": "Sends the lyrics of the panel's media players again.",
+      "fields": { "panel": { "name": "Panel", "description": "The Room Companion panel." } }
+    }
+  }
+}
