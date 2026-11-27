@@ -243,9 +243,12 @@ class AssetStore:
             return out.data, out.content_type, headers
         return await self._cached(key, make)
 
-    def add_image(self, url: str) -> str:
-        """Remember an image URL for the panel and return its key."""
-        key = hashlib.sha256(url.encode()).hexdigest()[:24]
+    def add_image(self, url: str, key: str | None = None) -> str:
+        """Remember an image URL for the panel and return its key.
+
+        A given key keeps the panel's URL when the source URL changes.
+        """
+        key = key or hashlib.sha256(url.encode()).hexdigest()[:24]
         self._sources.pop(key, None)
         self._sources[key] = url
         while len(self._sources) > SOURCE_LIMIT:

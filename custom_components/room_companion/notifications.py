@@ -8,6 +8,7 @@ which notification is on screen.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from urllib.parse import urljoin
 
@@ -44,7 +45,7 @@ class Messenger:
         self.timeout = timeout
         self.active_kde: str | None = None
 
-    def local_image(self, url: str) -> str:
+    def local_image(self, url: str, key: str | None = None) -> str:
         """Serve an image through Home Assistant, sized for the panel."""
         if not url:
             return ""
@@ -55,15 +56,15 @@ class Messenger:
             url = urljoin(origin + "/", url.lstrip("/"))
         if not url.startswith(("http://", "https://")) or self.base is None:
             return url if url.startswith(("http://", "https://")) else ""
-        key = self.store.add_image(url)
+        key = self.store.add_image(url, key)
         return f"{self.base}/image/{key}.png?w={IMAGE_BOX}&h={IMAGE_BOX}"
 
     async def show(self, title: str, message: str, image_url: str = "",
-                   timeout: int | None = None) -> bool:
+                   timeout: int | None = None, *, local: bool = False) -> bool:
         return await panel.call(self.hass, self.prefix, ACTION_SHOW_MESSAGE, {
             "title": title[:200],
             "message": message[:1000],
-            "image_url": self.local_image(image_url)[:1024],
+            "image_url": (image_url if local else self.local_image(image_url))[:1024],
             "timeout_seconds": self.timeout if timeout is None else max(0, int(timeout)),
         })
 
@@ -86,10 +87,20 @@ class Messenger:
             action = data.get("action")
             if action in ("added", "updated"):
                 app = str(data.get("app") or "")
+                title = str(data.get("title") or app)
+                # The panel joins cards with the same title and picture URL.
+                # KDE for Home Assistant serves every icon under a new token,
+                # so each message of a joined desktop chat (one stable id)
+                # would get a card of its own. One notification keeps one
+                # picture URL, pointed at its newest icon; the app and title
+                # keep a reused phone id from showing another app's icon.
+                image_key = hashlib.sha256(
+                    "\0".join(("kde", key, app, title)).encode()).hexdigest()[:24]
                 if await self.show(
-                    str(data.get("title") or app),
+                    title,
                     str(data.get("text") or data.get("ticker") or app),
-                    str(data.get("icon_url") or ""),
+                    self.local_image(str(data.get("icon_url") or ""), image_key),
+                    local=True,
                 ):
                     self.active_kde = key
             elif action == "removed" and key == self.active_kde:
