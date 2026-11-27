@@ -364,7 +364,7 @@ class AssetView(HomeAssistantView):
         if kind == "glyph":
             font = entry.options.get(CONF_GLYPH_FONT)
             stem, ext = _split_ext(name, "a8")
-            if not GLYPH_RE.match(stem) or ext not in ("a8", "png") or not 0x20 <= int(stem, 16) <= 0x10FFFF:
+            if not GLYPH_RE.match(stem) or ext not in ("a8", "a8h", "png") or not 0x20 <= int(stem, 16) <= 0x10FFFF:
                 return None
             return await store.glyph(font, int(stem, 16), _int(request, "size", 24, 8, 128), ext)
         return None

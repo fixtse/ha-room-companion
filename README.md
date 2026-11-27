@@ -57,7 +57,7 @@ Copy `custom_components/room_companion` into your configuration's
      Assistant's local network address is one the panel cannot reach (for
      example a VPN address).
    - **Font for missing characters** (optional): characters the device's
-     fonts lack are drawn with the bundled Noto Sans (Latin, Greek, Cyrillic)
+     fonts lack are drawn with the bundled Noto Sans (Latin, Greek, Cyrillic),
      Noto Sans SC (Chinese, Japanese kana) and Noto Sans KR (Korean). Enter the path of a
      TTF/OTF file on the Home Assistant host to prefer another font; the
      bundled ones still cover what it lacks.
@@ -70,14 +70,14 @@ lyrics are not sent twice.
 
 Lyrics and notifications work with any Room Companion firmware. Local images,
 the mid-song lyrics request and the lyrics offset need panel firmware
-2026.11.1.25 or later, or knob firmware 2026.11.1.4 or later. When the device
+2026.11.1.25 or later, or knob firmware 2026.11.1.4 or later (missing
+characters: 2026.11.1.26 and 2026.11.1.5). When the device
 connects, the integration calls its `set_companion` action with its asset URL;
 the device keeps it and falls back to the internet sources for five minutes
 whenever Home Assistant does not answer.
 
-The `/glyph` endpoint is ready, but no firmware requests glyphs yet: missing
-characters still show as boxes on the devices until a firmware release uses
-it.
+With that firmware, characters the device's fonts lack (for example Chinese,
+Japanese, Korean, Greek or Cyrillic song titles) are drawn from `/glyph`.
 
 ## Actions
 
@@ -108,7 +108,7 @@ action when the panel connects; `GET <base>/info` lists what is served.
 | `/emoji/<stem>.png\|.bgra\|.svg` | `size` (default 48) | Noto Color Emoji. `stem` is the code points in lowercase hex joined by `_`, without `fe0f` (`1f468_200d_1f469`). `.bgra` is raw LVGL ARGB8888. |
 | `/icon/<name>.svg` | `size` (default 80) | A white Material Design Icon, e.g. `/icon/weather-sunny.svg`. |
 | `/image/<key>.png` | `w`, `h`, `fmt` | A picture passed to `show_message`, shrunk to fit. |
-| `/glyph/<codepoint>.a8\|.png` | `size` (default 24) | One character the device's fonts lack, white, from the optional chosen font or the bundled Noto Sans, Noto Sans SC or Noto Sans KR. `.a8` is 8-bit alpha; headers `X-Width`, `X-Height`, `X-Advance`, `X-Ascent`. |
+| `/glyph/<codepoint>.a8\|.png` | `size` (default 24) | One character the device's fonts lack, white, from the optional chosen font or the bundled Noto Sans, Noto Sans SC or Noto Sans KR. `.a8` is 8-bit alpha with headers `X-Width`, `X-Height`, `X-Advance`, `X-Ascent`; `.a8h` puts those four as little-endian uint16 before the alpha rows (what the firmware uses). |
 
 Raw formats (`rgb565`, `bgra`, `a8`) carry `X-Width` and `X-Height` headers.
 `rgb565` is little endian, LVGL's native order; `swap=1` gives big endian.

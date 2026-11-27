@@ -62,3 +62,13 @@ def test_chosen_font_first() -> None:
     latin, cjk, _korean = imaging.BUNDLED_FONTS
     assert imaging.has_glyph(latin, "A", 24) and not imaging.has_glyph(latin, "中", 24)
     assert imaging.glyph([cjk, latin], "中", 24) is not None
+
+
+def test_glyph_with_header() -> None:
+    import struct
+
+    out = imaging.glyph(imaging.BUNDLED_FONTS, "中", 24, "a8h")
+    assert out is not None
+    width, height, advance, ascent = struct.unpack("<HHHH", out.data[:8])
+    assert (width, height, advance, ascent) == (out.width, out.height, out.advance, out.ascent)
+    assert len(out.data) == 8 + width * height

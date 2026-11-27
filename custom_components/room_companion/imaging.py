@@ -7,6 +7,7 @@ for the panel so it only decodes (JPEG/PNG) or copies (raw formats) them.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import struct
 from functools import lru_cache
 import io
 from pathlib import Path
@@ -195,4 +196,9 @@ def glyph(fonts: list[str], text: str, size: int, fmt: str = "a8") -> Glyph | No
         buffer = io.BytesIO()
         image.save(buffer, "PNG", optimize=True)
         return Glyph(buffer.getvalue(), "image/png", advance, height, advance, ascent)
-    return Glyph(mask.tobytes(), "application/octet-stream", advance, height, advance, ascent)
+    data = mask.tobytes()
+    if fmt == "a8h":
+        # For the firmware: width, height, advance and ascent (uint16 little
+        # endian) before the 8-bit alpha rows, so no response headers are needed.
+        data = struct.pack("<HHHH", advance, height, advance, ascent) + data
+    return Glyph(data, "application/octet-stream", advance, height, advance, ascent)
