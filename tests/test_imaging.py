@@ -59,6 +59,6 @@ def test_bundled_glyphs() -> None:
 
 def test_chosen_font_first() -> None:
     """A chosen font is used first; the bundled ones fill in what it lacks."""
-    latin, cjk = imaging.BUNDLED_FONTS
+    latin, cjk, _korean = imaging.BUNDLED_FONTS
     assert imaging.has_glyph(latin, "A", 24) and not imaging.has_glyph(latin, "中", 24)
     assert imaging.glyph([cjk, latin], "中", 24) is not None

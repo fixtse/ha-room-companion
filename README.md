@@ -58,7 +58,7 @@ Copy `custom_components/room_companion` into your configuration's
      example a VPN address).
    - **Font for missing characters** (optional): characters the device's
      fonts lack are drawn with the bundled Noto Sans (Latin, Greek, Cyrillic)
-     and Noto Sans SC (Chinese, Japanese kana, Korean). Enter the path of a
+     Noto Sans SC (Chinese, Japanese kana) and Noto Sans KR (Korean). Enter the path of a
      TTF/OTF file on the Home Assistant host to prefer another font; the
      bundled ones still cover what it lacks.
 
@@ -108,7 +108,7 @@ action when the panel connects; `GET <base>/info` lists what is served.
 | `/emoji/<stem>.png\|.bgra\|.svg` | `size` (default 48) | Noto Color Emoji. `stem` is the code points in lowercase hex joined by `_`, without `fe0f` (`1f468_200d_1f469`). `.bgra` is raw LVGL ARGB8888. |
 | `/icon/<name>.svg` | `size` (default 80) | A white Material Design Icon, e.g. `/icon/weather-sunny.svg`. |
 | `/image/<key>.png` | `w`, `h`, `fmt` | A picture passed to `show_message`, shrunk to fit. |
-| `/glyph/<codepoint>.a8\|.png` | `size` (default 24) | One character the device's fonts lack, white, from the optional chosen font or the bundled Noto Sans / Noto Sans SC. `.a8` is 8-bit alpha; headers `X-Width`, `X-Height`, `X-Advance`, `X-Ascent`. |
+| `/glyph/<codepoint>.a8\|.png` | `size` (default 24) | One character the device's fonts lack, white, from the optional chosen font or the bundled Noto Sans, Noto Sans SC or Noto Sans KR. `.a8` is 8-bit alpha; headers `X-Width`, `X-Height`, `X-Advance`, `X-Ascent`. |
 
 Raw formats (`rgb565`, `bgra`, `a8`) carry `X-Width` and `X-Height` headers.
 `rgb565` is little endian, LVGL's native order; `swap=1` gives big endian.
@@ -124,7 +124,7 @@ firmware above has not been verified yet.
 ## License
 
 AGPL-3.0-or-later, like ESPHome Room Companion. The bundled fonts in
-`custom_components/room_companion/fonts/` (Noto Sans and Noto Sans SC) are
+`custom_components/room_companion/fonts/` (Noto Sans, Noto Sans SC and Noto Sans KR) are
 under the SIL Open Font License 1.1; their licenses are in that folder. Noto Color Emoji are under the
 SIL Open Font License 1.1 and Material Design Icons under the Apache License
 2.0; both are downloaded at run time, not shipped here.

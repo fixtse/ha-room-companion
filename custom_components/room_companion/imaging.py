@@ -16,9 +16,12 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 MAX_SIDE = 960
 
 # Bundled fallbacks for characters the panel fonts lack (SIL OFL 1.1, see fonts/):
-# Latin, Greek and Cyrillic, then Chinese, Japanese kana and Korean.
+# Latin, Greek and Cyrillic; Chinese and Japanese kana; Korean.
 FONT_DIR = Path(__file__).parent / "fonts"
-BUNDLED_FONTS = [str(FONT_DIR / "NotoSans-Regular.ttf"), str(FONT_DIR / "NotoSansSC-Regular.otf")]
+BUNDLED_FONTS = [
+    str(FONT_DIR / name)
+    for name in ("NotoSans-Regular.ttf", "NotoSansSC-Regular.otf", "NotoSansKR-Regular.otf")
+]
 FORMATS = ("jpeg", "png", "rgb565", "bgra")
 
 
