@@ -1,14 +1,21 @@
 {
   "domain": "room_companion",
   "name": "Room Companion",
-  "after_dependencies": ["esphome", "media_player"],
-  "codeowners": ["@fixtse"],
+  "after_dependencies": [
+    "esphome",
+    "media_player"
+  ],
+  "codeowners": [
+    "@fixtse"
+  ],
   "config_flow": true,
-  "dependencies": ["http"],
+  "dependencies": [
+    "http"
+  ],
   "documentation": "https://github.com/fixtse/ha-room-companion",
   "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/fixtse/ha-room-companion/issues",
-  "requirements": ["Pillow>=10.0.0"],
-  "version": "0.1.0"
+  "requirements": [],
+  "version": "0.1.1"
 }
