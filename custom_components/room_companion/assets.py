@@ -28,7 +28,8 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from . import imaging
+from . import cameras, imaging
+from .cameras import Cameras, Snapshots, entry_token
 from .const import (
     API_VERSION,
     CONF_GLYPH_FONT,
@@ -319,7 +320,7 @@ class InfoView(HomeAssistantView):
         return self.json({
             "api": API_VERSION,
             "panel": entry.title,
-            "kinds": ["cover", "emoji", "icon", "image", "glyph"],
+            "kinds": ["cover", "emoji", "icon", "image", "glyph", "camera", "snapshot", "stream"],
         })
 
 
@@ -330,14 +331,25 @@ class AssetView(HomeAssistantView):
     name = "api:room_companion:asset"
     requires_auth = False
 
-    def __init__(self, store: AssetStore) -> None:
+    def __init__(self, store: AssetStore, cameras: Cameras, snapshots: Snapshots) -> None:
         self.store = store
+        self.cameras = cameras
+        self.snapshots = snapshots
+        self._sized: dict[tuple[str, int, int], tuple[float, bytes]] = {}
 
     async def get(self, request: web.Request, token: str, kind: str, name: str) -> web.Response:
         hass: HomeAssistant = request.app["hass"]
         entry = _entry_for_token(hass, token)
         if entry is None:
             return web.Response(status=404)
+        if kind == "camera":
+            return await self._camera(entry, request, name)
+        if kind in ("snapshot", "stream"):
+            if not cameras.ENTITY_RE.match(name):
+                return web.Response(status=404)
+            if kind == "snapshot":
+                return await self._snapshot(entry, request, name)
+            return await self._stream(entry, request, name)
         found = await self._find(entry, request, kind, name)
         if found is None:
             return web.Response(status=404, headers={"Cache-Control": "no-store"})
@@ -349,6 +361,89 @@ class AssetView(HomeAssistantView):
         return web.Response(
             body=data, content_type=content_type, headers={"Cache-Control": cache, **headers}
         )
+
+    async def _camera(self, entry: Any, request: web.Request, entity: str) -> web.Response:
+        """The live camera page the panel's stream server opens."""
+        if not entity.startswith("camera."):
+            return web.Response(status=404)
+        # The origin the server's browser used: the WebRTC embed page must be framed from it.
+        origin = f"{request.scheme}://{request.host}"
+        live = await self.cameras.resolve(
+            dict(entry.options), entry_token(entry), origin, entity, request.query.get("stream") or None
+        )
+        if live is None:
+            _LOGGER.info("No live stream found for %s (WebRTC Camera or go2rtc)", entity)
+        return web.Response(
+            text=cameras.page(live, dict(request.query)), content_type="text/html",
+            headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"},
+        )
+
+    def _watch(self, entry: Any, request: web.Request, entity: str) -> tuple[int, int]:
+        """Starts watching a camera; returns the requested frame size."""
+        options, origin = dict(entry.options), f"{request.scheme}://{request.host}"
+        # live=1: the panel plays the camera live through this integration next;
+        # resolve it now (WebRTC link, go2rtc stream) so the live page loads at once.
+        if request.query.get("live") == "1":
+            entry.async_create_background_task(
+                request.app["hass"], self.cameras.resolve(options, entry_token(entry), origin, entity),
+                f"room_companion live {entity}")
+        return _int(request, "w", 320, 16, imaging.MAX_SIDE), _int(request, "h", 320, 16, imaging.MAX_SIDE)
+
+    async def _sized_frame(self, entity: str, frame: tuple[float, bytes], w: int, h: int) -> bytes | None:
+        """The frame scaled to fit w x h (JPEG), converted once per frame and size."""
+        key = (entity, w, h)
+        cached = self._sized.get(key)
+        if cached and cached[0] == frame[0]:
+            return cached[1]
+        hass = self.store.hass
+        try:
+            out = await hass.async_add_executor_job(imaging.fit, frame[1], w, h, "jpeg", 80)
+        except Exception as err:  # noqa: BLE001 - an undecodable frame.
+            _LOGGER.debug("Snapshot of %s not readable: %s", entity, err)
+            return None
+        if len(self._sized) > 64:
+            self._sized.clear()
+        self._sized[key] = (frame[0], out.data)
+        return out.data
+
+    async def _snapshot(self, entry: Any, request: web.Request, entity: str) -> web.Response:
+        """The camera's latest frame at the camera frame's size."""
+        w, h = self._watch(entry, request, entity)
+        data = await self.snapshots.get(dict(entry.options), f"{request.scheme}://{request.host}", entity)
+        frame = self.snapshots.latest(entity)
+        sized = await self._sized_frame(entity, frame, w, h) if data and frame else None
+        if sized is None:
+            return web.Response(status=404, headers={"Cache-Control": "no-store"})
+        return web.Response(body=sized, content_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+    async def _stream(self, entry: Any, request: web.Request, entity: str) -> web.StreamResponse:
+        """MJPEG of the camera's frames at the camera frame's size, while the panel reads it."""
+        w, h = self._watch(entry, request, entity)
+        options, origin = dict(entry.options), f"{request.scheme}://{request.host}"
+        await self.snapshots.get(options, origin, entity)
+        response = web.StreamResponse(headers={
+            "Content-Type": "multipart/x-mixed-replace;boundary=frame", "Cache-Control": "no-store"})
+        await response.prepare(request)
+        sent_at, last_write = None, 0.0
+        loop = asyncio.get_running_loop()
+        try:
+            for _ in range(int(cameras.STREAM_LIMIT_S / cameras.STREAM_TICK_S)):
+                self.snapshots.touch(entity)
+                frame = self.snapshots.latest(entity)
+                now = loop.time()
+                # New frames as they come, the last one again now and then so the panel
+                # sees the stream is alive.
+                if frame and (frame[0] != sent_at or now - last_write > cameras.STREAM_KEEPALIVE_S):
+                    sized = await self._sized_frame(entity, frame, w, h)
+                    if sized:
+                        await response.write(
+                            b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
+                            + str(len(sized)).encode() + b"\r\n\r\n" + sized + b"\r\n")
+                        sent_at, last_write = frame[0], now
+                await asyncio.sleep(cameras.STREAM_TICK_S)
+        except (ConnectionResetError, asyncio.CancelledError):
+            pass
+        return response
 
     async def _find(self, entry: Any, request: web.Request, kind: str, name: str) -> tuple[bytes, str, dict[str, str]] | None:
         store = self.store

@@ -2,6 +2,7 @@
   "services": {
     "show_message": { "service": "mdi:message-text" },
     "dismiss_message": { "service": "mdi:message-off" },
-    "resend_lyrics": { "service": "mdi:music-note" }
+    "resend_lyrics": { "service": "mdi:music-note" },
+    "play_camera_audio": { "service": "mdi:cctv" }
   }
 }

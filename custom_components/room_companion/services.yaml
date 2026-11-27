@@ -42,3 +42,23 @@ resend_lyrics:
       selector:
         config_entry:
           integration: room_companion
+play_camera_audio:
+  fields:
+    camera:
+      required: true
+      selector:
+        entity:
+          domain: camera
+    media_player:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    device:
+      example: living-room-panel
+      selector:
+        text:
+    stream:
+      example: front_door
+      selector:
+        text:

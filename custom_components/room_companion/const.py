@@ -19,6 +19,8 @@ CONF_KDE: Final = "kde_notifications"
 CONF_KDE_DEVICES: Final = "kde_devices"
 CONF_BASE_URL: Final = "base_url"
 CONF_GLYPH_FONT: Final = "glyph_font"
+CONF_CAMERA_SOURCE: Final = "camera_source"
+CONF_GO2RTC_URL: Final = "go2rtc_url"
 
 DEFAULT_TIMEOUT: Final = 30
 

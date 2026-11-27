@@ -2,7 +2,7 @@
 
 One config entry per panel. It sends synced lyrics, forwards notifications,
 serves the panel's images (covers, blurred backdrops, emoji, icons, glyphs)
-locally, and warns when the panel may not call Home Assistant actions.
+locally, finds the live stream of its cameras, and warns when the panel may not call Home Assistant actions.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import STATE_UNAVAILABLE, Platform
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP, STATE_UNAVAILABLE, Platform
 from homeassistant.core import (
     Event,
     EventStateChangedData,
@@ -30,6 +30,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from . import panel
 from .assets import AssetStore, AssetView, InfoView
+from .cameras import Cameras, Snapshots
 from .const import (
     ACTION_SET_COMPANION,
     ACTION_SET_LYRICS_OFFSET,
@@ -59,6 +60,7 @@ ATTR_PANEL = "panel"
 SERVICE_SHOW_MESSAGE = "show_message"
 SERVICE_DISMISS_MESSAGE = "dismiss_message"
 SERVICE_RESEND_LYRICS = "resend_lyrics"
+SERVICE_PLAY_CAMERA_AUDIO = "play_camera_audio"
 
 
 @dataclass
@@ -83,9 +85,16 @@ def _store(hass: HomeAssistant) -> AssetStore:
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register the asset views and services once."""
     store = AssetStore(hass)
-    hass.data[DOMAIN] = {"store": store}
+    cams = Cameras(hass)
+    snapshots = Snapshots(hass, cams)
+    hass.data[DOMAIN] = {"store": store, "cameras": cams, "snapshots": snapshots}
     hass.http.register_view(InfoView())
-    hass.http.register_view(AssetView(store))
+    hass.http.register_view(AssetView(store, cams, snapshots))
+
+    async def _stop(_: Event) -> None:
+        await snapshots.async_stop()
+
+    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _stop)
 
     def _entries(call: ServiceCall) -> list[RoomCompanionConfigEntry]:
         ids = call.data[ATTR_PANEL]
@@ -115,6 +124,26 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         for entry in _entries(call):
             entry.runtime_data.lyrics.resend()
 
+    async def play_camera_audio(call: ServiceCall) -> None:
+        # Called by a panel (its device name in "device") or by anyone (any panel's options).
+        device = (call.data.get("device") or "").replace("-", "_")
+        loaded = [e for e in hass.config_entries.async_entries(DOMAIN) if e.state is ConfigEntryState.LOADED]
+        entry = next((e for e in loaded if e.data[CONF_PREFIX] == device), loaded[0] if loaded else None)
+        if entry is None:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_panels")
+        origin = (asset_base(hass, entry) or "").split(URL_BASE, 1)[0]
+        live = await cams.resolve(dict(entry.options), str(entry.data[CONF_TOKEN]), origin,
+                                  call.data["camera"], call.data.get("stream"))
+        if live is None or not live.audio:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="no_camera_stream",
+                translation_placeholders={"camera": call.data["camera"]},
+            )
+        await hass.services.async_call("media_player", "play_media", {
+            "entity_id": call.data["media_player"], "media_content_id": live.audio,
+            "media_content_type": "music", "announce": True,
+        }, blocking=False)
+
     panels = vol.All(cv.ensure_list, [cv.string])
     hass.services.async_register(DOMAIN, SERVICE_SHOW_MESSAGE, show_message, vol.Schema({
         vol.Required(ATTR_PANEL): panels,
@@ -127,6 +156,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                                  vol.Schema({vol.Required(ATTR_PANEL): panels}))
     hass.services.async_register(DOMAIN, SERVICE_RESEND_LYRICS, resend_lyrics,
                                  vol.Schema({vol.Required(ATTR_PANEL): panels}))
+    hass.services.async_register(DOMAIN, SERVICE_PLAY_CAMERA_AUDIO, play_camera_audio, vol.Schema({
+        vol.Required("camera"): cv.entity_domain("camera"),
+        vol.Required("media_player"): cv.entity_domain("media_player"),
+        vol.Optional("device"): cv.string,
+        vol.Optional("stream"): cv.string,
+    }))
     return True
 
 

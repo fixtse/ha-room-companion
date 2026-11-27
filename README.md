@@ -25,6 +25,11 @@ today:
   Noto Color Emoji, Material Design Icons and characters the panel's fonts
   lack, all served from Home Assistant over the local network. Remote files
   are downloaded once and cached on disk. See [Asset API](#asset-api).
+- **Live cameras.** For panels whose camera source is *Room Companion*, Home
+  Assistant finds each camera's live stream (the WebRTC Camera integration, or
+  go2rtc: yours, Frigate's or Home Assistant's) and serves the panel's stream
+  server a page that plays it in the camera frame. Camera sound goes through
+  `room_companion.play_camera_audio`. See [Live cameras](#live-cameras).
 - **Setup check.** A repair appears when the panel's ESPHome option **Allow
   the device to perform Home Assistant actions** is off.
 
@@ -56,6 +61,9 @@ Copy `custom_components/room_companion` into your configuration's
    - **Home Assistant address for the panel**: only needed when Home
      Assistant's local network address is one the panel cannot reach (for
      example a VPN address).
+   - **Live camera source**: *Automatic* (WebRTC Camera when installed, else
+     go2rtc), *WebRTC Camera integration* or *go2rtc*.
+   - **go2rtc address** (optional), e.g. `http://192.168.1.10:1984`.
    - **Font for missing characters** (optional): characters the device's
      fonts lack are drawn with the bundled Noto Sans (Latin, Greek, Cyrillic),
      Noto Sans SC (Chinese, Japanese kana) and Noto Sans KR (Korean). Enter the path of a
@@ -79,6 +87,31 @@ whenever Home Assistant does not answer.
 With that firmware, characters the device's fonts lack (for example Chinese,
 Japanese, Korean, Greek or Cyrillic song titles) are drawn from `/glyph`.
 
+## Live cameras
+
+Panel firmware 2026.11.1.29 or later. On the panel's settings page, **Streamed
+page** tab, set the Remote WebView server and choose **Camera source → Room
+Companion integration**. When a camera screen opens, the server's browser opens
+`<base>/camera/<camera entity>` (with the frame's position) from Home
+Assistant, which:
+
+1. With the [WebRTC Camera](https://github.com/AlexxIT/WebRTC) integration
+   installed (and the source *Automatic* or *WebRTC Camera*), registers a link
+   for the camera (`webrtc.create_link`, no time or open limit, an
+   unguessable id) and frames the integration's `/webrtc/embed` page. Both
+   pages come from Home Assistant, so the embed page may be framed, and the
+   panel no longer needs to call that action itself.
+2. Otherwise looks for go2rtc: the address in the options, then Frigate's
+   (port 1984 on the Frigate host), then Home Assistant's own go2rtc when it
+   listens on the network (port 11984, `debug_ui`). The stream is found by
+   name (the entity's object id, Frigate's camera name, the camera's name) or
+   by its source address; a camera go2rtc does not have yet is added from Home
+   Assistant's stream source (`PUT /api/streams`).
+
+The panel's **Other stream names** still apply (sent as `stream=`). Camera
+sound: the panel calls `room_companion.play_camera_audio`, which plays go2rtc's
+RTSP output of the camera (port 8554) on the panel's speaker.
+
 ## Actions
 
 | Action | Fields |
@@ -86,6 +119,7 @@ Japanese, Korean, Greek or Cyrillic song titles) are drawn from `/glyph`.
 | `room_companion.show_message` | `panel`, `message`, optional `title`, `image_url`, `timeout` |
 | `room_companion.dismiss_message` | `panel` |
 | `room_companion.resend_lyrics` | `panel` |
+| `room_companion.play_camera_audio` | `camera`, `media_player`, optional `device` (the panel's ESPHome name, for its options), `stream` |
 
 `panel` is the Room Companion entry of the panel (pick it in the action editor).
 
@@ -98,7 +132,7 @@ http://<home assistant>:8123/api/room_companion/<token>
 ```
 
 The panel cannot send Home Assistant credentials with each image request, so
-the unguessable token stands in for them. It only grants these images. Newer
+the unguessable token stands in for them. It only grants these images and the camera pages. Newer
 firmware receives the base URL through its `set_companion(url)` ESPHome
 action when the panel connects; `GET <base>/info` lists what is served.
 
@@ -108,6 +142,7 @@ action when the panel connects; `GET <base>/info` lists what is served.
 | `/emoji/<stem>.png\|.bgra\|.svg` | `size` (default 48) | Noto Color Emoji. `stem` is the code points in lowercase hex joined by `_`, without `fe0f` (`1f468_200d_1f469`). `.bgra` is raw LVGL ARGB8888. |
 | `/icon/<name>.svg` | `size` (default 80) | A white Material Design Icon, e.g. `/icon/weather-sunny.svg`. |
 | `/image/<key>.png` | `w`, `h`, `fmt` | A picture passed to `show_message`, shrunk to fit. |
+| `/camera/<camera>` | `x`, `y`, `w`, `h` (percent of the screen), `r` (degrees, full screen), `stream` | An HTML page playing the camera's live stream in that rectangle, for the panel's Remote WebView server. |
 | `/glyph/<codepoint>.a8\|.png` | `size` (default 24) | One character the device's fonts lack, white, from the optional chosen font or the bundled Noto Sans, Noto Sans SC or Noto Sans KR. `.a8` is 8-bit alpha with headers `X-Width`, `X-Height`, `X-Advance`, `X-Ascent`; `.a8h` puts those four as little-endian uint16 before the alpha rows (what the firmware uses). |
 
 Raw formats (`rgb565`, `bgra`, `a8`) carry `X-Width` and `X-Height` headers.

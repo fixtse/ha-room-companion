@@ -25,7 +25,9 @@
           "kde_notifications": "Show KDE Connect notifications",
           "kde_devices": "KDE Connect devices",
           "base_url": "Home Assistant address for the panel",
-          "glyph_font": "Font for missing characters (optional)"
+          "glyph_font": "Font for missing characters (optional)",
+          "camera_source": "Live camera source",
+          "go2rtc_url": "go2rtc address (optional)"
         },
         "data_description": {
           "media_players": "The players this panel shows. When a track starts, their lyrics come from LRCLIB once. Players opened on the panel mid-song get theirs when the screen opens.",
@@ -34,7 +36,9 @@
           "kde_notifications": "Needs KDE for Home Assistant. Notifications removed on the phone are cleared on the panel.",
           "kde_devices": "Only these devices. Leave empty for all.",
           "base_url": "Where the panel reaches Home Assistant, for example http://192.168.1.2:8123. Leave empty to use Home Assistant's local network address.",
-          "glyph_font": "Characters the device's fonts lack are drawn with the bundled Noto Sans (Latin, Greek, Cyrillic), Noto Sans SC (Chinese, Japanese kana) and Noto Sans KR (Korean). To prefer another font, enter the path of a TTF or OTF file on the Home Assistant host, for example /config/fonts/MyFont.ttf; the bundled fonts still cover what it lacks."
+          "glyph_font": "Characters the device's fonts lack are drawn with the bundled Noto Sans (Latin, Greek, Cyrillic), Noto Sans SC (Chinese, Japanese kana) and Noto Sans KR (Korean). To prefer another font, enter the path of a TTF or OTF file on the Home Assistant host, for example /config/fonts/MyFont.ttf; the bundled fonts still cover what it lacks.",
+          "camera_source": "For panels whose camera source is Room Companion. Automatic uses the WebRTC Camera integration when it is installed, else go2rtc.",
+          "go2rtc_url": "Your go2rtc server, for example http://192.168.1.10:1984. Leave empty to use Frigate's (port 1984) or Home Assistant's own go2rtc when it listens on the network. Cameras go2rtc does not know are added from their stream address."
         }
       }
     }
@@ -60,6 +64,12 @@
   "exceptions": {
     "panel_not_loaded": {
       "message": "Room Companion panel {panel} is not set up or not loaded."
+    },
+    "no_panels": {
+      "message": "No Room Companion panel is set up."
+    },
+    "no_camera_stream": {
+      "message": "No live stream with sound found for {camera}."
     }
   },
   "services": {
@@ -107,6 +117,37 @@
           "name": "Panel",
           "description": "The Room Companion panel."
         }
+      }
+    },
+    "play_camera_audio": {
+      "name": "Play camera sound",
+      "description": "Plays a camera's sound on a media player, from go2rtc's stream of the camera. The panels call it for their camera screens.",
+      "fields": {
+        "camera": {
+          "name": "Camera",
+          "description": "The camera."
+        },
+        "media_player": {
+          "name": "Media player",
+          "description": "Where to play the sound."
+        },
+        "device": {
+          "name": "Panel device name",
+          "description": "The panel's ESPHome device name, to use its options. Optional."
+        },
+        "stream": {
+          "name": "Stream name",
+          "description": "A go2rtc stream name or stream address to use instead of finding it. Optional."
+        }
+      }
+    }
+  },
+  "selector": {
+    "camera_source": {
+      "options": {
+        "auto": "Automatic",
+        "webrtc": "WebRTC Camera integration",
+        "go2rtc": "go2rtc"
       }
     }
   }

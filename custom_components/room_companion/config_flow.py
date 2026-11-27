@@ -12,9 +12,12 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from . import panel
+from .cameras import SOURCE_AUTO, SOURCES
 from .const import (
     CONF_BASE_URL,
+    CONF_CAMERA_SOURCE,
     CONF_GLYPH_FONT,
+    CONF_GO2RTC_URL,
     CONF_KDE,
     CONF_KDE_DEVICES,
     CONF_LYRICS,
@@ -42,6 +45,12 @@ def options_schema(options: dict[str, Any]) -> vol.Schema:
             selector.DeviceSelector(selector.DeviceSelectorConfig(integration=KDE_DOMAIN, multiple=True)),
         vol.Optional(CONF_BASE_URL, description={"suggested_value": options.get(CONF_BASE_URL)}):
             selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.URL)),
+        vol.Optional(CONF_CAMERA_SOURCE, default=options.get(CONF_CAMERA_SOURCE, SOURCE_AUTO)):
+            selector.SelectSelector(selector.SelectSelectorConfig(
+                options=list(SOURCES), translation_key=CONF_CAMERA_SOURCE,
+                mode=selector.SelectSelectorMode.DROPDOWN)),
+        vol.Optional(CONF_GO2RTC_URL, description={"suggested_value": options.get(CONF_GO2RTC_URL)}):
+            selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.URL)),
         vol.Optional(CONF_GLYPH_FONT, description={"suggested_value": options.get(CONF_GLYPH_FONT)}):
             selector.TextSelector(),
     })
@@ -51,7 +60,7 @@ def clean(user_input: dict[str, Any]) -> dict[str, Any]:
     """Normalise submitted options."""
     data = dict(user_input)
     data[CONF_TIMEOUT] = int(data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT))
-    for key in (CONF_BASE_URL, CONF_GLYPH_FONT):
+    for key in (CONF_BASE_URL, CONF_GLYPH_FONT, CONF_GO2RTC_URL):
         value = str(data.get(key) or "").strip()
         if value:
             data[key] = value.rstrip("/") if key == CONF_BASE_URL else value
