@@ -7,11 +7,18 @@ for the panel so it only decodes (JPEG/PNG) or copies (raw formats) them.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import io
+from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 MAX_SIDE = 960
+
+# Bundled fallbacks for characters the panel fonts lack (SIL OFL 1.1, see fonts/):
+# Latin, Greek and Cyrillic, then Chinese, Japanese kana and Korean.
+FONT_DIR = Path(__file__).parent / "fonts"
+BUNDLED_FONTS = [str(FONT_DIR / "NotoSans-Regular.ttf"), str(FONT_DIR / "NotoSansSC-Regular.otf")]
 FORMATS = ("jpeg", "png", "rgb565", "bgra")
 
 
@@ -131,13 +138,40 @@ class Glyph:
     ascent: int
 
 
-def glyph(font_path: str, text: str, size: int, fmt: str = "a8") -> Glyph | None:
+@lru_cache(maxsize=32)
+def _font(path: str, size: int) -> ImageFont.FreeTypeFont:
+    return ImageFont.truetype(path, size)
+
+
+@lru_cache(maxsize=32)
+def _notdef(path: str, size: int) -> bytes:
+    """What the font draws for a character it lacks (its .notdef box)."""
+    font = _font(path, size)
+    return font.getmask("\U000f0000").tobytes()
+
+
+def has_glyph(path: str, text: str, size: int) -> bool:
+    """Whether the font has its own glyph for text (not the .notdef box)."""
+    font = _font(path, size)
+    if text.isspace():
+        return font.getlength(text) > 0
+    mask = font.getmask(text)
+    return mask.getbbox() is not None and mask.tobytes() != _notdef(path, size)
+
+
+def glyph(fonts: list[str], text: str, size: int, fmt: str = "a8") -> Glyph | None:
     """Render text (normally one character) in white, for characters the panel fonts lack.
 
-    The bitmap is the font's full line height so glyphs share a baseline (ascent
-    pixels from the top). Returns None when the font has no glyph for it.
+    Uses the first font in fonts that has the character. The bitmap is the
+    font's full line height so glyphs share a baseline (ascent pixels from the
+    top). Returns None when no font has it.
     """
-    font = ImageFont.truetype(font_path, size)
+    for path in fonts:
+        if has_glyph(path, text, size):
+            break
+    else:
+        return None
+    font = _font(path, size)
     ascent, descent = font.getmetrics()
     advance = round(font.getlength(text))
     if advance <= 0:
@@ -145,8 +179,6 @@ def glyph(font_path: str, text: str, size: int, fmt: str = "a8") -> Glyph | None
     height = ascent + descent
     mask = Image.new("L", (advance, height), 0)
     ImageDraw.Draw(mask).text((0, 0), text, fill=255, font=font)
-    if mask.getbbox() is None and not text.isspace():
-        return None
     if fmt == "png":
         image = Image.new("RGBA", mask.size, (255, 255, 255, 0))
         image.putalpha(mask)

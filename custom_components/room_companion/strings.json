@@ -25,7 +25,7 @@
           "kde_notifications": "Show KDE Connect notifications",
           "kde_devices": "KDE Connect devices",
           "base_url": "Home Assistant address for the panel",
-          "glyph_font": "Font for missing characters"
+          "glyph_font": "Font for missing characters (optional)"
         },
         "data_description": {
           "media_players": "The players this panel shows. When a track starts, their lyrics come from LRCLIB once. Players opened on the panel mid-song get theirs when the screen opens.",
@@ -34,7 +34,7 @@
           "kde_notifications": "Needs KDE for Home Assistant. Notifications removed on the phone are cleared on the panel.",
           "kde_devices": "Only these devices. Leave empty for all.",
           "base_url": "Where the panel reaches Home Assistant, for example http://192.168.1.2:8123. Leave empty to use Home Assistant's local network address.",
-          "glyph_font": "Path to a TTF or OTF file on the Home Assistant host, for example /config/fonts/NotoSansSC-Regular.otf. Leave empty to turn off characters drawn by Home Assistant."
+          "glyph_font": "Characters the device's fonts lack are drawn with the bundled Noto Sans (Latin, Greek, Cyrillic) and Noto Sans SC (Chinese, Japanese kana, Korean). To prefer another font, enter the path of a TTF or OTF file on the Home Assistant host, for example /config/fonts/MyFont.ttf; the bundled fonts still cover what it lacks."
         }
       }
     }

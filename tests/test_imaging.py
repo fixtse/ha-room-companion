@@ -43,3 +43,22 @@ def test_square_bgra() -> None:
 def test_contain_never_enlarges() -> None:
     out = imaging.contain(_png((50, 40)), 240, 240)
     assert (out.width, out.height) == (50, 40)
+
+
+def test_bundled_glyphs() -> None:
+    fonts = imaging.BUNDLED_FONTS
+    for char in ("Ж", "ß", "中", "あ", "한"):
+        out = imaging.glyph(fonts, char, 24)
+        assert out is not None, char
+        assert len(out.data) == out.width * out.height and out.advance > 0 and 0 < out.ascent <= out.height
+        assert any(out.data), char
+    assert imaging.glyph(fonts, "\U000f0001", 24) is None  # Private use: no font has it.
+    png = imaging.glyph(fonts, "中", 24, "png")
+    assert png is not None and png.content_type == "image/png"
+
+
+def test_chosen_font_first() -> None:
+    """A chosen font is used first; the bundled ones fill in what it lacks."""
+    latin, cjk = imaging.BUNDLED_FONTS
+    assert imaging.has_glyph(latin, "A", 24) and not imaging.has_glyph(latin, "中", 24)
+    assert imaging.glyph([cjk, latin], "中", 24) is not None

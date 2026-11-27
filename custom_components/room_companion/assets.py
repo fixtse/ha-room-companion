@@ -265,13 +265,15 @@ class AssetStore:
             return out.data, out.content_type, _size_headers(out)
         return await self._cached(f"image:{key}:{width}x{height}:{fmt}", make)
 
-    async def glyph(self, font: str, codepoint: int, size: int, fmt: str) -> tuple[bytes, str, dict[str, str]] | None:
-        """A character the panel's fonts lack, drawn with the configured font."""
+    async def glyph(self, font: str | None, codepoint: int, size: int, fmt: str) -> tuple[bytes, str, dict[str, str]] | None:
+        """A character the panel's fonts lack: the chosen font first, then the bundled ones."""
+        fonts = ([font] if font else []) + imaging.BUNDLED_FONTS
+
         async def make() -> tuple[bytes, str, dict[str, str]] | None:
             try:
-                out = await self.hass.async_add_executor_job(imaging.glyph, font, chr(codepoint), size, fmt)
+                out = await self.hass.async_add_executor_job(imaging.glyph, fonts, chr(codepoint), size, fmt)
             except OSError as err:
-                _LOGGER.warning("Glyph font %s cannot be read: %s", font, err)
+                _LOGGER.warning("A glyph font cannot be read (%s): %s", ", ".join(fonts), err)
                 return None
             if out is None:
                 return None
@@ -310,8 +312,7 @@ class InfoView(HomeAssistantView):
         return self.json({
             "api": API_VERSION,
             "panel": entry.title,
-            "kinds": ["cover", "emoji", "icon", "image"]
-            + (["glyph"] if entry.options.get(CONF_GLYPH_FONT) else []),
+            "kinds": ["cover", "emoji", "icon", "image", "glyph"],
         })
 
 
@@ -363,7 +364,7 @@ class AssetView(HomeAssistantView):
         if kind == "glyph":
             font = entry.options.get(CONF_GLYPH_FONT)
             stem, ext = _split_ext(name, "a8")
-            if not font or not GLYPH_RE.match(stem) or ext not in ("a8", "png"):
+            if not GLYPH_RE.match(stem) or ext not in ("a8", "png") or not 0x20 <= int(stem, 16) <= 0x10FFFF:
                 return None
             return await store.glyph(font, int(stem, 16), _int(request, "size", 24, 8, 128), ext)
         return None
