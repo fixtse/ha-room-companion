@@ -122,6 +122,31 @@ async def test_snapshot_from_go2rtc_sized(hass: HomeAssistant, hass_client_no_au
     await hass.data["room_companion"]["snapshots"].async_stop()
 
 
+async def test_snapshot_of_image_entity(hass: HomeAssistant, hass_client_no_auth, panel_calls) -> None:
+    """A vacuum map published as an image entity is served like a camera snapshot (no stream)."""
+    from homeassistant.components.image import Image as EntityImage
+
+    await _setup(hass, {})
+    hass.states.async_set("image.vacuum_map", "2026-11-28T10:00:00+00:00")
+    client = await hass_client_no_auth()
+    with patch("homeassistant.components.image.async_get_image",
+               return_value=EntityImage("image/png", _jpeg(800, 600))) as fetch:
+        response = await client.get(f"/api/room_companion/{TOKEN}/snapshot/image.vacuum_map?w=320&h=320")
+        assert response.status == HTTPStatus.OK
+        assert response.headers["Content-Type"] == "image/jpeg"
+        assert fetch.call_args.args[1] == "image.vacuum_map"
+        # An unchanged image is not read again; a new one is.
+        snapshots = hass.data["room_companion"]["snapshots"]
+        await snapshots._grab("image.vacuum_map")
+        assert fetch.call_count == 1
+        hass.states.async_set("image.vacuum_map", "2026-11-28T10:05:00+00:00")
+        await snapshots._grab("image.vacuum_map")
+        assert fetch.call_count == 2
+    # Image entities have no stream or live page.
+    assert (await client.get(f"/api/room_companion/{TOKEN}/stream/image.vacuum_map")).status == HTTPStatus.NOT_FOUND
+    await hass.data["room_companion"]["snapshots"].async_stop()
+
+
 async def test_snapshot_from_home_assistant(hass: HomeAssistant, hass_client_no_auth, aioclient_mock, panel_calls) -> None:
     from homeassistant.components.camera import Image as CameraImage
 

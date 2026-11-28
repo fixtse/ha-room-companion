@@ -77,6 +77,8 @@ LIVE_TTL_S = 300.0  # Resolved live sources are reused (WebRTC links survive unt
 RTSP_PORT = 8554
 STREAMS_TTL_S = 60
 ENTITY_RE = re.compile(r"^camera\.[a-z0-9_]+$")
+# Snapshots also serve image entities (e.g. a vacuum map), which have no stream.
+SNAPSHOT_RE = re.compile(r"^(camera|image)\.[a-z0-9_]+$")
 NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
 
 PLAYER = "&mode=webrtc,mse&media=video"
@@ -317,9 +319,29 @@ class Snapshots:
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._fetching: dict[str, asyncio.Task[bytes | None]] = {}
         self._sources: dict[str, tuple[dict[str, Any], str]] = {}
+        self._image_versions: dict[str, str | None] = {}
 
     async def _grab(self, entity: str) -> bytes | None:
         options, origin = self._sources[entity]
+        if entity.startswith("image."):
+            # An image entity's state is when its picture last changed: read the
+            # picture again only then, and keep serving the same frame otherwise
+            # (same frame time, so the sized copy is reused too).
+            state = self.hass.states.get(entity)
+            version = state.state if state else None
+            kept = self._latest.get(entity)
+            if kept is not None and version is not None and self._image_versions.get(entity) == version:
+                return kept[1]
+            from homeassistant.components import image  # noqa: PLC0415
+
+            try:
+                data = (await image.async_get_image(self.hass, entity, timeout=10)).content
+            except Exception as err:  # noqa: BLE001 - unavailable images raise various errors.
+                _LOGGER.debug("No picture of %s: %s", entity, err)
+                return None
+            self._image_versions[entity] = version
+            self._latest[entity] = (time.monotonic(), data)
+            return data
         data = await self.cameras.frame(options, origin, entity)
         if data is None:
             from homeassistant.components import camera  # noqa: PLC0415

@@ -350,7 +350,8 @@ class AssetView(HomeAssistantView):
         if kind == "camera":
             return await self._camera(entry, request, name)
         if kind in ("snapshot", "stream"):
-            if not cameras.ENTITY_RE.match(name):
+            pattern = cameras.SNAPSHOT_RE if kind == "snapshot" else cameras.ENTITY_RE
+            if not pattern.match(name):
                 return web.Response(status=404)
             if kind == "snapshot":
                 return await self._snapshot(entry, request, name)

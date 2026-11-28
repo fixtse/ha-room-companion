@@ -151,6 +151,7 @@ action when the panel connects; `GET <base>/info` lists what is served.
 | `/emoji/<stem>.png\|.bgra\|.svg` | `size` (default 48) | Noto Color Emoji. `stem` is the code points in lowercase hex joined by `_`, without `fe0f` (`1f468_200d_1f469`). `.bgra` is raw LVGL ARGB8888. |
 | `/icon/<name>.svg` | `size` (default 80) | A white Material Design Icon, e.g. `/icon/weather-sunny.svg`. |
 | `/image/<key>.png` | `w`, `h`, `fmt` | A picture passed to `show_message`, shrunk to fit. |
+| `/snapshot/<camera or image>` | `w`, `h` | The latest frame scaled to fit `w`×`h` (JPEG). Image entities (for example a vacuum map from Xiaomi Cloud Map Extractor or Roborock) are served the same way, without a stream. |
 | `/camera/<camera>` | `x`, `y`, `w`, `h` (percent of the screen), `r` (degrees, full screen), `stream` | An HTML page playing the camera's live stream in that rectangle, for the panel's Remote WebView server. |
 | `/glyph/<codepoint>.a8\|.png` | `size` (default 24) | One character the device's fonts lack, white, from the optional chosen font or the bundled Noto Sans, Noto Sans SC or Noto Sans KR. `.a8` is 8-bit alpha with headers `X-Width`, `X-Height`, `X-Advance`, `X-Ascent`; `.a8h` puts those four as little-endian uint16 before the alpha rows (what the firmware uses). |
 
